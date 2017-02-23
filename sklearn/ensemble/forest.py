@@ -536,7 +536,7 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
 
             return predictions
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, err=False):
         """Predict class probabilities for X.
 
         The predicted class probabilities of an input sample are computed as
@@ -574,12 +574,23 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
 
         # Reduce
         proba = all_proba[0]
+        # support for errors estimation
+        if err:
+            proba_err = np.zeros_like(proba)
 
         if self.n_outputs_ == 1:
             for j in range(1, len(all_proba)):
                 proba += all_proba[j]
 
             proba /= len(self.estimators_)
+
+            # FV: compute std error
+            # proba_err = np.std(all_proba, ddof=1)
+            if err:
+                for j in range(1, len(all_proba)):
+                    proba_err += (all_proba[j] - proba)**2
+
+                proba_err /= len(self.estimators_)
 
         else:
             for j in range(1, len(all_proba)):
@@ -589,7 +600,14 @@ class ForestClassifier(six.with_metaclass(ABCMeta, BaseForest,
             for k in range(self.n_outputs_):
                 proba[k] /= self.n_estimators
 
-        return proba
+            if err:
+                for j in range(1, len(all_proba)):
+                    for k in range(self.n_outputs_):
+                        proba_err[k] += (all_proba[j][k] - proba[k])**2
+                for k in range(self.n_estimators):
+                    proba_err[k] /= self.n_estimators
+
+        return proba, np.sqrt(proba_err)
 
     def predict_log_proba(self, X):
         """Predict class log-probabilities for X.
